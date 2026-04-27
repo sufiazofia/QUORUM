@@ -1,25 +1,42 @@
-function drawText() {
-  stroke(100, 150, 120);
-  strokeWeight(1.5);
-  noFill();
+let cells;
+let cellSize = 10;
+let cols, rows;
 
-  for (let i = 0; i < textPoints.length - 1; i++) {
-    let p0 = textPoints[i];
-    let p1 = textPoints[i + 1];
+let textPoints = [];
+let textString = "QUORUM";
 
-    let d = dist(p0.x, p0.y, p1.x, p1.y);
-    if (d > 20) continue;
+function setup() {
+  createCanvas(window.innerWidth, window.innerHeight);
 
-    let distMouse = dist(mouseX, mouseY, p0.x, p0.y);
+  // GRID
+  cols = floor(width / cellSize);
+  rows = floor(height / cellSize);
 
-    let influence = map(distMouse, 0, 180, 2.2, 0);
-    influence = constrain(influence, 0, 2.2);
+  cells = new Array(cols).fill().map(() => new Array(rows).fill(0));
 
-    let angle = atan2(p1.y - p0.y, p1.x - p0.x);
-
-    let cx = p0.x + cos(angle) * d * influence * 2;
-    let cy = p0.y + sin(angle) * d * influence * 2;
-
-    bezier(p0.x, p0.y, cx, cy, cx, cy, p1.x, p1.y);
+  for (let x = 0; x < cols; x++) {
+    for (let y = 0; y < rows; y++) {
+      cells[x][y] = random() > 0.85 ? 1 : 0;
+    }
   }
+
+  // TEXTO
+  textFont('serif');
+  textSize(min(width * 0.15, 180));
+
+  let bounds = textBounds(textString, 0, 0);
+
+  let x = (width - bounds.w) / 2;
+  let y = (height + bounds.h) / 2;
+
+  textPoints = textToPoints(textString, x, y, textSize(), {
+    sampleFactor: 0.12
+  });
+}
+
+function draw() {
+  background(235, 245, 238);
+
+  drawBackground();
+  drawText();
 }
