@@ -113,7 +113,7 @@
     <div class="controls">
       <button id="export">EXPORTAR</button>
       <button id="pause">PAUSAR</button>
-      <button id="switch">CÂMERA</button>
+      <button id="switch">SWITCH</button>
     </div>
   </div>
 
@@ -218,22 +218,25 @@ setInterval(update,300);
 // exportar PNG
 document.getElementById('export').onclick = ()=>{
   let c = document.createElement('canvas');
-  c.width = 400;
-  c.height = 400;
+  c.width = video.videoWidth || 640;
+  c.height = (video.videoHeight || 640) * 2;
   let cx = c.getContext('2d');
 
-  const colors = [
-    getComputedStyle(c1).backgroundColor,
-    getComputedStyle(c2).backgroundColor,
-    getComputedStyle(c3).backgroundColor,
-    getComputedStyle(c4).backgroundColor
-  ];
+  // câmera (desfaz o espelho se for frontal)
+  if(usingFront){
+    cx.translate(c.width, 0);
+    cx.scale(-1, 1);
+  }
+  cx.drawImage(video, 0, 0, c.width, c.height / 2);
+  cx.setTransform(1, 0, 0, 1, 0, 0); // reset transform
 
-  let i=0;
-  for(let x=0;x<2;x++){
-    for(let y=0;y<2;y++){
-      cx.fillStyle = colors[i++];
-      cx.fillRect(x*200,y*200,200,200);
+  // paleta
+  const swatches = [c1, c2, c3, c4];
+  let i = 0;
+  for(let x = 0; x < 2; x++){
+    for(let y = 0; y < 2; y++){
+      cx.fillStyle = swatches[i++].style.background;
+      cx.fillRect(x * (c.width/2), c.height/2 + y * (c.height/4), c.width/2, c.height/4);
     }
   }
 
