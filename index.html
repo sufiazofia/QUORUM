@@ -42,7 +42,6 @@
     width:100%;
     height:100%;
     object-fit:cover;
-    transform: scaleX(-1);
   }
 
   .live {
@@ -150,6 +149,9 @@ async function startCamera(){
 
   currentStream = await navigator.mediaDevices.getUserMedia(constraints);
   video.srcObject = currentStream;
+  
+  // ← adiciona essa linha:
+  video.style.transform = usingFront ? 'scaleX(-1)' : 'scaleX(1)';
 }
 
 startCamera();
