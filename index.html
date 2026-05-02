@@ -27,14 +27,14 @@
   }
 
   .container {
-    height:100vh;
+    height:100dvh;
     display:flex;
     flex-direction:column;
   }
 
   .camera {
     position:relative;
-    height:50%;
+    height: calc(50% - env(safe-area-inset-bottom));
     background:black;
   }
 
