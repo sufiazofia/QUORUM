@@ -15,9 +15,9 @@
     font-family: Arial, sans-serif;
     text-transform: uppercase;
     overflow:hidden;
+    background:white;
   }
 
-  /* fundo pixelado */
   #bgCanvas {
     position:fixed;
     top:0; left:0;
@@ -42,9 +42,9 @@
     width:100%;
     height:100%;
     object-fit:cover;
+    transform: scaleX(-1);
   }
 
-  /* indicador ao vivo */
   .live {
     position:absolute;
     top:10px;
@@ -113,6 +113,8 @@
 
     <div class="controls">
       <button id="export">EXPORTAR</button>
+      <button id="pause">PAUSAR</button>
+      <button id="switch">CÂMERA</button>
     </div>
   </div>
 
@@ -132,19 +134,25 @@ const ctx = canvas.getContext('2d');
 canvas.width = 50;
 canvas.height = 50;
 
-const bgCanvas = document.getElementById('bgCanvas');
-const bgCtx = bgCanvas.getContext('2d');
+let currentStream = null;
+let usingFront = true;
+let paused = false;
 
-function resizeBG(){
-  bgCanvas.width = window.innerWidth;
-  bgCanvas.height = window.innerHeight;
+// iniciar câmera
+async function startCamera(){
+  if(currentStream){
+    currentStream.getTracks().forEach(t => t.stop());
+  }
+
+  const constraints = {
+    video: { facingMode: usingFront ? "user" : "environment" }
+  };
+
+  currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+  video.srcObject = currentStream;
 }
-resizeBG();
-window.onresize = resizeBG;
 
-// câmera
-navigator.mediaDevices.getUserMedia({ video:true })
-  .then(stream => video.srcObject = stream);
+startCamera();
 
 // distância entre cores
 function colorDistance(a,b){
@@ -192,7 +200,7 @@ function extractColors(){
 
 // atualiza UI
 function update(){
-  if(video.readyState < 2) return;
+  if(video.readyState < 2 || paused) return;
 
   const cols = extractColors();
 
@@ -201,23 +209,6 @@ function update(){
     let color = `rgb(${c.r},${c.g},${c.b})`;
     el.style.background = color;
   });
-
-  drawBG(cols[0]);
-}
-
-// fundo pixelado
-function drawBG(main){
-  let size = 10;
-
-  for(let x=0;x<bgCanvas.width;x+=size){
-    for(let y=0;y<bgCanvas.height;y+=size){
-      let isBlack = (x+y)/size % 2 === 0;
-      bgCtx.fillStyle = isBlack
-        ? `rgb(${main.r},${main.g},${main.b})`
-        : "#fff";
-      bgCtx.fillRect(x,y,size,size);
-    }
-  }
 }
 
 setInterval(update,300);
@@ -248,6 +239,25 @@ document.getElementById('export').onclick = ()=>{
   link.download = 'palette.png';
   link.href = c.toDataURL();
   link.click();
+};
+
+// botão pausa
+document.getElementById('pause').onclick = ()=>{
+  paused = !paused;
+
+  if(paused){
+    video.pause();
+    pause.innerText = "PLAY";
+  } else {
+    video.play();
+    pause.innerText = "PAUSAR";
+  }
+};
+
+// trocar câmera
+document.getElementById('switch').onclick = ()=>{
+  usingFront = !usingFront;
+  startCamera();
 };
 </script>
 
