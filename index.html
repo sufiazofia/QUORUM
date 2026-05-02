@@ -1,25 +1,269 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>QUORUM</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Color Palette Extractor</title>
 
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: #EBF5EE;
-    }
-  </style>
+<style>
+  :root {
+    --c1:#000; --c2:#000; --c3:#000; --c4:#000;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    overflow:hidden;
+  }
+
+  /* fundo pixelado */
+  #bgCanvas {
+    position:fixed;
+    top:0; left:0;
+    width:100%;
+    height:100%;
+    z-index:-1;
+  }
+
+  .container {
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .camera {
+    position:relative;
+    height:50%;
+    background:black;
+  }
+
+  video {
+    width:100%;
+    height:100%;
+    object-fit:cover;
+  }
+
+  /* indicador ao vivo */
+  .live {
+    position:absolute;
+    top:10px;
+    right:10px;
+    color:white;
+    font-size:12px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+
+  .dot {
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:red;
+    animation:blink 2s infinite;
+  }
+
+  @keyframes blink {
+    0%,100% {opacity:1;}
+    50% {opacity:0;}
+  }
+
+  .palette {
+    height:50%;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr 1fr;
+  }
+
+  .swatch {
+    transition:background 0.3s ease;
+  }
+
+  .controls {
+    position:absolute;
+    bottom:10px;
+    left:10px;
+    display:flex;
+    gap:10px;
+  }
+
+  button {
+    padding:8px 12px;
+    border:none;
+    background:black;
+    color:white;
+    font-size:10px;
+  }
+</style>
 </head>
 
 <body>
 
-  <!-- p5 -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<canvas id="bgCanvas"></canvas>
 
-  <!-- seu script -->
-  <script src="script.js"></script>
+<div class="container">
+  <div class="camera">
+    <video id="video" autoplay playsinline></video>
+
+    <div class="live">
+      <div class="dot"></div>
+      AO VIVO
+    </div>
+
+    <div class="controls">
+      <button id="export">EXPORTAR</button>
+      <button id="upload">VÍDEO</button>
+    </div>
+  </div>
+
+  <div class="palette">
+    <div class="swatch" id="c1"></div>
+    <div class="swatch" id="c2"></div>
+    <div class="swatch" id="c3"></div>
+    <div class="swatch" id="c4"></div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="video/*" hidden>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+
+canvas.width = 50;
+canvas.height = 50;
+
+const bgCanvas = document.getElementById('bgCanvas');
+const bgCtx = bgCanvas.getContext('2d');
+
+function resizeBG(){
+  bgCanvas.width = window.innerWidth;
+  bgCanvas.height = window.innerHeight;
+}
+resizeBG();
+window.onresize = resizeBG;
+
+// câmera
+navigator.mediaDevices.getUserMedia({ video:true })
+  .then(stream => video.srcObject = stream);
+
+// distância entre cores
+function colorDistance(a,b){
+  return Math.sqrt(
+    (a.r-b.r)**2 +
+    (a.g-b.g)**2 +
+    (a.b-b.b)**2
+  );
+}
+
+// extrai cores
+function extractColors(){
+  ctx.drawImage(video,0,0,50,50);
+  const data = ctx.getImageData(0,0,50,50).data;
+
+  const map = {};
+
+  for(let i=0;i<data.length;i+=4){
+    let r = data[i]>>4;
+    let g = data[i+1]>>4;
+    let b = data[i+2]>>4;
+
+    let key = `${r},${g},${b}`;
+    map[key] = (map[key]||0)+1;
+  }
+
+  let colors = Object.entries(map)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([k])=>{
+      let [r,g,b] = k.split(',').map(v=>v*16);
+      return {r,g,b};
+    });
+
+  let selected = [];
+
+  for(let c of colors){
+    if(selected.every(s => colorDistance(s,c) > 60)){
+      selected.push(c);
+    }
+    if(selected.length === 4) break;
+  }
+
+  return selected;
+}
+
+// atualiza UI
+function update(){
+  if(video.readyState < 2) return;
+
+  const cols = extractColors();
+
+  cols.forEach((c,i)=>{
+    let el = document.getElementById('c'+(i+1));
+    let color = `rgb(${c.r},${c.g},${c.b})`;
+    el.style.background = color;
+  });
+
+  drawBG(cols[0]);
+}
+
+// fundo pixelado
+function drawBG(main){
+  let size = 10;
+
+  for(let x=0;x<bgCanvas.width;x+=size){
+    for(let y=0;y<bgCanvas.height;y+=size){
+      let isBlack = (x+y)/size % 2 === 0;
+      bgCtx.fillStyle = isBlack
+        ? `rgb(${main.r},${main.g},${main.b})`
+        : "#fff";
+      bgCtx.fillRect(x,y,size,size);
+    }
+  }
+}
+
+setInterval(update,300);
+
+// exportar PNG
+document.getElementById('export').onclick = ()=>{
+  let c = document.createElement('canvas');
+  c.width = 400;
+  c.height = 400;
+  let cx = c.getContext('2d');
+
+  const colors = [
+    getComputedStyle(c1).backgroundColor,
+    getComputedStyle(c2).backgroundColor,
+    getComputedStyle(c3).backgroundColor,
+    getComputedStyle(c4).backgroundColor
+  ];
+
+  let i=0;
+  for(let x=0;x<2;x++){
+    for(let y=0;y<2;y++){
+      cx.fillStyle = colors[i++];
+      cx.fillRect(x*200,y*200,200,200);
+    }
+  }
+
+  let link = document.createElement('a');
+  link.download = 'palette.png';
+  link.href = c.toDataURL();
+  link.click();
+};
+
+// upload vídeo
+document.getElementById('upload').onclick = ()=>{
+  document.getElementById('fileInput').click();
+};
+
+fileInput.onchange = e=>{
+  let file = e.target.files[0];
+  video.srcObject = null;
+  video.src = URL.createObjectURL(file);
+};
+</script>
 
 </body>
 </html>
