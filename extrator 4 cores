@@ -3,268 +3,328 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Color Palette Extractor</title>
-
+<title>Xadrez Ao Vivo</title>
 <style>
-  :root {
-    --c1:#000; --c2:#000; --c3:#000; --c4:#000;
-  }
-
   * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    font-family: Arial, sans-serif;
-    text-transform: uppercase;
-    overflow:hidden;
-    background:white;
-  }
 
-  #bgCanvas {
-    position:fixed;
-    top:0; left:0;
-    width:100%;
-    height:100%;
-    z-index:-1;
+  body {
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+    overflow: hidden;
+    background: #000;
   }
 
   .container {
-    height:100dvh;
-    display:flex;
-    flex-direction:column;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
   }
 
+  /* ── CÂMERA ── */
   .camera {
-    position:relative;
-    height: calc(50% - env(safe-area-inset-bottom));
-    background:black;
+    position: relative;
+    height: 50%;
+    background: black;
+    flex-shrink: 0;
   }
 
   video {
-    width:100%;
-    height:100%;
-    object-fit:cover;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
   }
 
-  .live {
-    position:absolute;
-    top:10px;
-    right:10px;
-    color:white;
-    font-size:12px;
-    display:flex;
-    align-items:center;
-    gap:6px;
+  .live-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    color: white;
+    font-size: 10px;
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(0,0,0,0.45);
+    padding: 5px 10px;
   }
 
   .dot {
-    width:8px;
-    height:8px;
-    border-radius:50%;
-    background:red;
-    animation:blink 2s infinite;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ff2222;
+    animation: blink 1.5s infinite;
   }
 
   @keyframes blink {
-    0%,100% {opacity:1;}
-    50% {opacity:0;}
+    0%,100% { opacity:1; }
+    50%      { opacity:0; }
   }
 
-  .palette {
-    height:50%;
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    grid-template-rows:1fr 1fr;
+  /* 3 swatches finos no rodapé da câmera */
+  .swatches {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    display: flex;
+  }
+  .sw { flex: 1; transition: background 0.3s ease; }
+
+  /* ── TARTAN ── */
+  .tartan-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
   }
 
-  .swatch {
-    transition:background 0.3s ease;
+  #tartanCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
   }
 
+  /* ── CONTROLES ── */
   .controls {
-    position:absolute;
-    bottom:10px;
-    left:10px;
-    display:flex;
-    gap:10px;
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    display: flex;
+    gap: 8px;
+    z-index: 10;
   }
 
   button {
-    padding:8px 12px;
-    border:none;
-    background:black;
-    color:white;
-    font-size:10px;
+    padding: 7px 13px;
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(0,0,0,0.5);
+    color: white;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: background 0.15s;
   }
+  button:active { background: rgba(255,255,255,0.15); }
 </style>
 </head>
-
 <body>
 
-<canvas id="bgCanvas"></canvas>
-
 <div class="container">
-  <div class="camera">
-    <video id="video" autoplay playsinline></video>
 
-    <div class="live">
+  <!-- CÂMERA -->
+  <div class="camera">
+    <video id="video" autoplay playsinline muted></video>
+
+    <div class="live-badge">
       <div class="dot"></div>
-      AO VIVO
+      Ao vivo
+    </div>
+
+    <!-- swatches das 3 cores extraídas -->
+    <div class="swatches">
+      <div class="sw" id="s1"></div>
+      <div class="sw" id="s2"></div>
+      <div class="sw" id="s3"></div>
     </div>
 
     <div class="controls">
-      <button id="export">EXPORTAR</button>
-      <button id="pause">PAUSAR</button>
-      <button id="switch">SWITCH</button>
+      <button id="btnExport">Exportar</button>
+      <button id="btnPause">Pausar</button>
+      <button id="btnSwitch">Switch</button>
     </div>
   </div>
 
-  <div class="palette">
-    <div class="swatch" id="c1"></div>
-    <div class="swatch" id="c2"></div>
-    <div class="swatch" id="c3"></div>
-    <div class="swatch" id="c4"></div>
+  <!-- TARTAN -->
+  <div class="tartan-wrap">
+    <canvas id="tartanCanvas"></canvas>
   </div>
+
 </div>
 
 <script>
-const video = document.getElementById('video');
-const canvas = document.createElement('canvas');
-const ctx = canvas.getContext('2d');
+/* ── SETUP ── */
+const video        = document.getElementById('video');
+const tartanCanvas = document.getElementById('tartanCanvas');
+const tartanCtx    = tartanCanvas.getContext('2d');
 
-canvas.width = 50;
-canvas.height = 50;
+// canvas de amostragem
+const sample    = document.createElement('canvas');
+sample.width    = 50;
+sample.height   = 50;
+const sampleCtx = sample.getContext('2d');
+
+// tile quadrado offscreen — o padrão é desenhado aqui
+const tile    = document.createElement('canvas');
+tile.width    = 400;
+tile.height   = 400;
+const tileCtx = tile.getContext('2d');
+
+// tartanCanvas ocupa a tela; dimensão real acompanha o container
+function resizeTartanCanvas() {
+  tartanCanvas.width  = tartanCanvas.offsetWidth;
+  tartanCanvas.height = tartanCanvas.offsetHeight;
+}
+resizeTartanCanvas();
+window.addEventListener('resize', resizeTartanCanvas);
 
 let currentStream = null;
-let usingFront = true;
-let paused = false;
+let usingFront    = true;
+let paused        = false;
 
-// iniciar câmera
-async function startCamera(){
-  if(currentStream){
-    currentStream.getTracks().forEach(t => t.stop());
-  }
-
-  const constraints = {
-    video: { facingMode: usingFront ? "user" : "environment" }
-  };
-
-  currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+/* ── CÂMERA ── */
+async function startCamera() {
+  if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+  currentStream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: usingFront ? 'user' : 'environment' }
+  });
   video.srcObject = currentStream;
-  
-  // ← adiciona essa linha:
   video.style.transform = usingFront ? 'scaleX(-1)' : 'scaleX(1)';
 }
-
 startCamera();
 
-// distância entre cores
-function colorDistance(a,b){
-  return Math.sqrt(
-    (a.r-b.r)**2 +
-    (a.g-b.g)**2 +
-    (a.b-b.b)**2
-  );
+/* ── EXTRAÇÃO DE CORES ── */
+function colorDist(a, b) {
+  return Math.sqrt((a.r-b.r)**2 + (a.g-b.g)**2 + (a.b-b.b)**2);
 }
 
-// extrai cores
-function extractColors(){
-  ctx.drawImage(video,0,0,50,50);
-  const data = ctx.getImageData(0,0,50,50).data;
+function extractColors() {
+  sampleCtx.drawImage(video, 0, 0, 50, 50);
+  const data = sampleCtx.getImageData(0, 0, 50, 50).data;
 
   const map = {};
-
-  for(let i=0;i<data.length;i+=4){
-    let r = data[i]>>4;
-    let g = data[i+1]>>4;
-    let b = data[i+2]>>4;
-
-    let key = `${r},${g},${b}`;
-    map[key] = (map[key]||0)+1;
+  for (let i = 0; i < data.length; i += 4) {
+    const key = `${data[i]>>4},${data[i+1]>>4},${data[i+2]>>4}`;
+    map[key] = (map[key] || 0) + 1;
   }
 
-  let colors = Object.entries(map)
-    .sort((a,b)=>b[1]-a[1])
-    .map(([k])=>{
-      let [r,g,b] = k.split(',').map(v=>v*16);
-      return {r,g,b};
+  const sorted = Object.entries(map)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k]) => {
+      const [r, g, b] = k.split(',').map(v => v * 16);
+      return { r, g, b };
     });
 
-  let selected = [];
-
-  for(let c of colors){
-    if(selected.every(s => colorDistance(s,c) > 60)){
-      selected.push(c);
-    }
-    if(selected.length === 4) break;
+  const selected = [];
+  for (const c of sorted) {
+    if (selected.every(s => colorDist(s, c) > 55)) selected.push(c);
+    if (selected.length === 3) break;
   }
+
+  while (selected.length < 3) selected.push(selected[selected.length - 1] || { r:128, g:128, b:128 });
 
   return selected;
 }
 
-// atualiza UI
-function update(){
-  if(video.readyState < 2 || paused) return;
+/* ── TARTAN ── */
+// sett: [índice_cor, largura]
+// cores ordenadas por luminância: 0=mais claro, 1=médio, 2=mais escuro
+const SETT = [[2,70],[1,60],[0,12],[1,60]];
+const TILE  = SETT.reduce((s, [,w]) => s + w, 0); // 202
 
-  const cols = extractColors();
-
-  cols.forEach((c,i)=>{
-    let el = document.getElementById('c'+(i+1));
-    let color = `rgb(${c.r},${c.g},${c.b})`;
-    el.style.background = color;
-  });
+function getStripe(p) {
+  p = ((p % TILE) + TILE) % TILE;
+  let acc = 0;
+  for (const [ci, w] of SETT) {
+    acc += w;
+    if (p < acc) return ci;
+  }
+  return SETT[SETT.length - 1][0];
 }
 
-setInterval(update,300);
+function lum(c) {
+  return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+}
 
-// exportar PNG
-document.getElementById('export').onclick = ()=>{
-  let c = document.createElement('canvas');
-  c.width = video.videoWidth || 640;
-  c.height = (video.videoHeight || 640) * 2;
-  let cx = c.getContext('2d');
+function drawTartan(colors) {
+  const sorted = [...colors].sort((a, b) => lum(b) - lum(a));
 
-  // câmera (desfaz o espelho se for frontal)
-  if(usingFront){
-    cx.translate(c.width, 0);
-    cx.scale(-1, 1);
-  }
-  cx.drawImage(video, 0, 0, c.width, c.height / 2);
-  cx.setTransform(1, 0, 0, 1, 0, 0); // reset transform
+  // 1. desenha o tile quadrado 400x400
+  const S   = 400;
+  const img = tileCtx.createImageData(S, S);
+  const d   = img.data;
 
-  // paleta
-  const swatches = [c1, c2, c3, c4];
-  let i = 0;
-  for(let x = 0; x < 2; x++){
-    for(let y = 0; y < 2; y++){
-      cx.fillStyle = swatches[i++].style.background;
-      cx.fillRect(x * (c.width/2), c.height/2 + y * (c.height/4), c.width/2, c.height/4);
+  for (let y = 0; y < S; y++) {
+    const fci = getStripe(y);
+    for (let x = 0; x < S; x++) {
+      const wci = getStripe(x);
+      const c   = (wci === fci)
+                ? sorted[wci]
+                : ((x + y) % 2 === 0 ? sorted[wci] : sorted[fci]);
+      const i   = (y * S + x) * 4;
+      d[i]   = c.r;
+      d[i+1] = c.g;
+      d[i+2] = c.b;
+      d[i+3] = 255;
     }
   }
+  tileCtx.putImageData(img, 0, 0);
 
-  let link = document.createElement('a');
-  link.download = 'palette.png';
-  link.href = c.toDataURL();
+  // 2. replica o tile para preencher a tela
+  const pat = tartanCtx.createPattern(tile, 'repeat');
+  tartanCtx.fillStyle = pat;
+  tartanCtx.fillRect(0, 0, tartanCanvas.width, tartanCanvas.height);
+}
+
+/* ── LOOP PRINCIPAL ── */
+function update() {
+  if (video.readyState < 2 || paused) return;
+
+  const colors = extractColors();
+
+  colors.forEach((c, i) => {
+    document.getElementById('s' + (i + 1)).style.background =
+      `rgb(${c.r},${c.g},${c.b})`;
+  });
+
+  drawTartan(colors);
+}
+
+setInterval(update, 300);
+
+/* ── EXPORTAR ── */
+document.getElementById('btnExport').onclick = () => {
+  const w  = video.videoWidth  || 640;
+  const h  = video.videoHeight || 640;
+  const c  = document.createElement('canvas');
+  c.width  = w;
+  c.height = h * 2;
+  const cx = c.getContext('2d');
+
+  if (usingFront) { cx.translate(w, 0); cx.scale(-1, 1); }
+  cx.drawImage(video, 0, 0, w, h);
+  cx.setTransform(1, 0, 0, 1, 0, 0);
+
+  const pat = cx.createPattern(tartanCanvas, 'repeat');
+  cx.fillStyle = pat;
+  cx.fillRect(0, h, w, h);
+
+  const link    = document.createElement('a');
+  link.download = 'tartan.png';
+  link.href     = c.toDataURL();
   link.click();
 };
 
-// botão pausa
-document.getElementById('pause').onclick = ()=>{
+/* ── PAUSAR ── */
+document.getElementById('btnPause').onclick = () => {
   paused = !paused;
-
-  if(paused){
-    video.pause();
-    pause.innerText = "PLAY";
-  } else {
-    video.play();
-    pause.innerText = "PAUSAR";
-  }
+  const btn = document.getElementById('btnPause');
+  if (paused) { video.pause(); btn.textContent = 'Play'; }
+  else        { video.play();  btn.textContent = 'Pausar'; }
 };
 
-// trocar câmera
-document.getElementById('switch').onclick = ()=>{
+/* ── SWITCH ── */
+document.getElementById('btnSwitch').onclick = () => {
   usingFront = !usingFront;
   startCamera();
 };
 </script>
-
 </body>
 </html>
